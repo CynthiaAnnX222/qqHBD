@@ -1,0 +1,623 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>飞朱环游记</title>
+
+  <!-- =====================================================
+    📦 外部依赖库
+  ===================================================== -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Noto+Serif+SC:wght@300;400&family=Rajdhani:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <style>
+    :root {
+      --emerald:     #2cc7a5;      /* 蓝绿色主题线 */
+      --sky-glow:    rgba(56, 189, 248, 0.45); 
+      --ink:         #020617;      
+      --card-bg:     rgba(15, 23, 42, 0.7); 
+      --card-border: rgba(255, 255, 255, 0.15); 
+      --text-bright: #f8fafc;      
+      --text-muted:  #94a3b8; 
+      --transition-card: 0.6s cubic-bezier(0.16, 1, 0.3, 1); 
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden; background: var(--ink);
+      font-family: 'Noto Serif SC', serif; color: var(--text-bright);
+    }
+
+    #map { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+
+    /* 顶部标题加控制按钮区域 */
+    #header-container {
+      position: fixed; top: 30px; left: 30px; z-index: 50;
+      display: flex; flex-direction: column; gap: 15px;
+    }
+
+    /* 顶部标题面板 */
+    .header-panel {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      padding: 18px 30px; border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+    .header-panel .main-title {
+      font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 400; letter-spacing: 0.15em;
+      color: #ffffff; text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    }
+    .header-panel .subtitle {
+      display: block; margin-top: 6px;
+      font-family: 'Rajdhani', sans-serif; font-size: 12px; font-weight: 400; letter-spacing: 0.3em;
+      color: #cbd5e1; text-transform: uppercase;
+    }
+
+    /* 🟢 新增功能：回到全景初始界面的精致发光按钮 */
+    .reset-view-btn {
+      align-self: flex-start;
+      background: var(--card-bg);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      color: #ffffff; padding: 12px 22px; border-radius: 30px;
+      font-family: 'Rajdhani', sans-serif; font-size: 12px; font-weight: 500;
+      letter-spacing: 2px; cursor: pointer;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .reset-view-btn i { color: var(--emerald); font-size: 14px; transition: transform 0.6s ease; }
+    .reset-view-btn:hover {
+      border-color: var(--emerald);
+      color: var(--emerald);
+      box-shadow: 0 10px 25px rgba(44, 199, 165, 0.25);
+      transform: translateY(-2px);
+    }
+    .reset-view-btn:hover i {
+      transform: rotate(180deg); /* 悬浮时小地球标志会酷炫旋转 */
+    }
+
+    /* 故事卡片 UI */
+    #story-card {
+      position: fixed; right: 40px; top: 50%;
+      transform: translateY(-50%) translateX(0px);
+      z-index: 20; width: 380px;
+      background: var(--card-bg);
+      backdrop-filter: blur(30px) saturate(150%);
+      -webkit-backdrop-filter: blur(30px) saturate(150%);
+      border: 1px solid var(--card-border); border-radius: 24px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5); overflow: hidden;
+      opacity: 0; transform: translateY(-50%) translateX(40px);
+      transition: opacity var(--transition-card), transform var(--transition-card);
+      pointer-events: none;
+    }
+    #story-card.active { opacity: 1; transform: translateY(-50%) translateX(0px); pointer-events: auto; }
+
+    .close-btn {
+      position: absolute; top: 15px; right: 20px; z-index: 10;
+      background: rgba(0,0,0,0.4); border: none; color: #fff;
+      width: 30px; height: 30px; border-radius: 50%;
+      font-size: 14px; cursor: pointer; transition: background 0.3s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .close-btn:hover { background: rgba(0,0,0,0.7); color: var(--emerald); }
+
+    .card-image-wrap {
+      position: relative; width: 100%; height: 220px; overflow: hidden; cursor: pointer;
+    }
+    .card-image-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.4s; }
+    .card-image-wrap:hover img { transform: scale(1.05); }
+    .card-image-wrap::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 60px;
+      background: linear-gradient(to bottom, transparent, rgba(15, 23, 42, 0.95));
+    }
+    .click-hint-badge {
+      position: absolute; bottom: 15px; right: 15px; z-index: 2;
+      font-size: 11px; color: #fff; background: rgba(44, 199, 165, 0.85);
+      border-radius: 4px; padding: 4px 8px; font-weight: 500; letter-spacing: 1px;
+    }
+
+    .card-body { padding: 15px 24px 28px; }
+    .card-city { font-family: 'Noto Serif SC', serif; font-size: 28px; font-weight: 400; color: #ffffff; line-height: 1.2; margin-bottom: 6px; }
+    .card-date { font-family: 'Rajdhani', sans-serif; font-size: 11px; font-weight: 400; letter-spacing: 0.3em; color: var(--emerald); text-transform: uppercase; margin-bottom: 14px; }
+    .card-divider { width: 40px; height: 2px; background: var(--emerald); margin-bottom: 14px; }
+    .card-text { font-size: 14px; font-weight: 300; line-height: 1.85; color: #e2e8f0; text-align: justify;}
+
+    /* 📍 精致的玻璃质感地标针（Pin）样式 */
+    .custom-marker {
+      width: 24px; height: 24px;
+      background: rgba(44, 199, 165, 0.25); border: 2px solid var(--emerald);     
+      border-radius: 50% 50% 50% 0; transform: rotate(-45deg); cursor: pointer;
+      box-shadow: -2px 2px 6px rgba(0,0,0,0.4), 0 0 15px rgba(44, 199, 165, 0.4);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .custom-marker::after {
+      content: ''; width: 8px; height: 8px; background: #ffffff; border-radius: 50%; box-shadow: 0 0 6px #ffffff; transform: rotate(45deg); 
+    }
+    .custom-marker:hover {
+      background: rgba(44, 199, 165, 0.45); border-color: #ffffff; 
+      transform: rotate(-45deg) translate(3px, -3px) scale(1.2); 
+      box-shadow: -5px 5px 12px rgba(0,0,0,0.5), 0 0 25px var(--emerald);
+    }
+
+    /* 城市多媒体相册子界面 */
+    #gallery-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(8, 14, 30, 0.85);
+      backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+      display: flex; flex-direction: column; padding: 60px 40px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.5s ease;
+    }
+    #gallery-overlay.active { opacity: 1; pointer-events: auto; }
+
+    .gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 20px; }
+    .gallery-title { font-family: 'Noto Serif SC', serif; font-size: 32px; color: var(--emerald); font-weight: 400; }
+    
+    .back-map-btn {
+      background: transparent; border: 1px solid var(--emerald); color: var(--emerald);
+      padding: 10px 20px; border-radius: 30px; cursor: pointer; font-size: 14px;
+      display: flex; align-items: center; gap: 8px; transition: all 0.3s;
+    }
+    .back-map-btn:hover { background: var(--emerald); color: #fff; box-shadow: 0 0 15px rgba(44, 199, 165, 0.4); }
+
+    .media-grid {
+      flex-grow: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 25px; overflow-y: auto; padding-right: 10px;
+    }
+    .media-item {
+      position: relative; height: 200px; border-radius: 12px; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.1); cursor: pointer; transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .media-item:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
+    .media-item img, .media-item video { width: 100%; height: 100%; object-fit: cover; }
+    
+    .video-badge { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.2); font-size: 36px; color: #fff; transition: background 0.3s; }
+    .media-item:hover .video-badge { background: rgba(0,0,0,0.4); color: var(--emerald); }
+
+    /* 多媒体进一步放大预览灯箱 */
+    #lightbox {
+      position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.95);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+    }
+    #lightbox.active { opacity: 1; pointer-events: auto; }
+    #lightbox-content { max-width: 90%; max-height: 85%; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+    .lightbox-close { position: absolute; top: 30px; right: 40px; color: #fff; font-size: 36px; cursor: pointer; transition: color 0.3s; }
+    .lightbox-close:hover { color: var(--emerald); }
+    /* 🟢 复制以下内容，直接追加到 <style> 标签里的合适位置 */
+    .nav-arrow {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.6); width: 60px; height: 60px; border-radius: 50%;
+      font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 0.3s ease; z-index: 220;
+    }
+    .nav-arrow:hover {
+      background: rgba(44, 199, 165, 0.25); border-color: var(--emerald); color: var(--emerald);
+      box-shadow: 0 0 15px rgba(44, 199, 165, 0.3);
+    }
+    .arrow-left { left: 40px; }
+    .arrow-right { right: 40px; }
+
+    @media (max-width: 680px) {
+      .nav-arrow { width: 45px; height: 45px; font-size: 16px; }
+      .arrow-left { left: 15px; }
+      .arrow-right { right: 15px; }
+    }
+
+    /* 加载动画 */
+    #loading-screen {
+      position: fixed; inset: 0; z-index: 999; background: var(--ink);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; transition: opacity 1s ease;
+    }
+    #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+    .loading-title { font-family: 'Noto Serif SC', serif; font-size: 24px; font-weight: 300; color: #fff; letter-spacing: 0.15em; }
+    .loading-ring { width: 48px; height: 48px; border: 2px solid rgba(255,255,255,0.1); border-top-color: var(--emerald); border-radius: 50%; animation: spin 1.4s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 680px) {
+      #header-container { top: 15px; left: 15px; }
+      #story-card { right: 16px; left: 16px; width: auto; top: auto; bottom: 40px; transform: translateY(40px); }
+      #story-card.active { transform: translateY(0); }
+      .media-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 🟢 隐藏的 BGM 和音效音频标签 -->
+  <audio id="audio-launch">
+  <source src="https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/launch.mp3" type="audio/mpeg">
+  <source src="https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/launch.m4a" type="audio/mp4">
+  </audio>
+
+  <div id="loading-screen">
+    <div class="loading-ring"></div>
+    <div class="loading-title">飞朱环游记</div>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- 左上角整合面板 -->
+  <div id="header-container">
+    <header class="header-panel">
+      <span class="main-title">飞朱环游记</span>
+      <span class="subtitle">with lidar mini version </span>
+    </header>
+    
+    <!-- 🟢 新增的“返回地球全景”重置按钮 -->
+    <button class="reset-view-btn" onclick="resetToGlobeView()">
+      <i class="fa-solid fa-earth-asia"></i>
+      <span>返回地球全景</span>
+    </button>
+  </div>
+
+  <!-- 右侧故事卡片 -->
+  <div id="story-card">
+    <button class="close-btn" onclick="closeCard()"><i class="fa-solid fa-xmark"></i></button>
+    <div class="card-image-wrap" id="card-main-pic">
+      <span class="click-hint-badge"><i class="fa-solid fa-images"></i> 点击看相册</span>
+      <img id="card-img" src="" alt="Memory" />
+    </div>
+    <div class="card-body">
+      <div class="card-city" id="card-city">城市名称</div>
+      <div class="card-date" id="card-date">旅行日期</div>
+      <div class="card-divider"></div>
+      <div class="card-text" id="card-text">故事文本</div>
+    </div>
+  </div>
+
+  <!-- 城市多媒体相册子界面 -->
+  <div id="gallery-overlay">
+    <div class="gallery-header">
+      <div class="gallery-title" id="gallery-city-name">城市足迹相册</div>
+      
+      <button class="back-map-btn" onclick="closeGallery()">
+        <i class="fa-solid fa-earth-asia"></i> 返回地图
+      </button>
+    </div>
+    <div class="media-grid" id="gallery-media-grid"></div>
+  </div>
+
+  <!-- 多媒体全屏放大灯箱 -->
+  <div id="lightbox">
+    <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+    
+    <button class="nav-arrow arrow-left" onclick="navigateMedia(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+    <button class="nav-arrow arrow-right" onclick="navigateMedia(1)"><i class="fa-solid fa-chevron-right"></i></button>
+    
+    <div id="lightbox-target-box" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;"></div>
+  </div>
+
+  <script>
+  mapboxgl.accessToken = 'pk.eyJ1IjoiY3ludGhpYWFubngiLCJhIjoiY21wem1ubXhkMGl0YzJ1cHNnbGs5dXkxNyJ9.3woa-vzNTj8o4IGZMGp_yw';
+
+  // 15个城市记忆数据
+  const MEMORIES = [
+    { title: "深圳", date: "MEMORIES", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/shenzhen.mp3", center: [114.0579, 22.5431], zoom: 11, pitch: 55, bearing: -10, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/1.jpg", text: "这里是我们最熟悉的地方。无数次走过熟悉的街头，看城市的灯火彻夜不熄，最平凡的日常里藏着最安心的默契。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/2.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/3.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/4.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/5.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/6.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/7.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/8.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/9.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/10.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/11.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/12.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/13.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/14.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/15.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/16.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/17.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/18.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/19.jpg" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/20.mp4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/21.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/22.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/23.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/24.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/25.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/26.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/27.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/28.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/29.jpg" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/30.MP4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/31.JPG" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/32.mp4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/33.jpeg" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/34.mp4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/35.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/36.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/37.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/38.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/39.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/40.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/41.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/42.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/43.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/44.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/45.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/46.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/47.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/48.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/49.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/50.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/51.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/52.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/53.jpg" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/54.mp4" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/shenzhen/55.mp4" }] },
+    { title: "惠州", date: "2024.11.23-2024.11.24", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/huizhou.mp3", center: [114.4161, 23.1116], zoom: 11, pitch: 45, bearing: 15, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/1.JPG", text: "第一次属于四个人的旅行。一起去惠州西湖划船，在湖光山色里慢悠悠地晃荡，当然，最让人念念不忘的还是那只香气四闻的窑鸡。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/2.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/3.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/4.jpg" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/5.MP4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/6.JPG" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/7.mp4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/8.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/9.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/10.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/11.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/12.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/13.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/14.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/15.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/huizhou/16.JPG" }] },
+    { title: "澳门", date: "2025.03.08-2025.03.09", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/macao.mp3", center: [113.5439, 22.1987], zoom: 13, pitch: 55, bearing: -30, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/1.jpg", text: "澳门的记忆是属于夜晚的。吹着晚风在澳门岛的街头，看夜景流光溢彩，转头再去官也街塞满各种地道的小吃，满足又惬意。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/2.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/3.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/4.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/5.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/6.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/7.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/8.JPG" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/9.MP4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/10.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/11.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/12.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/13.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/14.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/15.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/16.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/17.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/18.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/19.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/20.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/21.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/22.JPG" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/23.MP4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/24.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/25.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/26.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/27.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/28.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/29.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/macao/30.JPG" }] },
+    { title: "天津", date: "2025.04.04-2025.04.05", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/tianjin.mp3", center: [117.2008, 39.0841], zoom: 11, pitch: 40, bearing: 10, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/1.png", text: "沿着海河一路骑行，风里满是海棠花的香气。一路上被天津人的幽默逗笑，手里还塞满了煎饼果子、熟梨糕和各种味道的海河牛奶，快乐其实很简单。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/2.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/3.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/4.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/5.png" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/6.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/7.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/8.png" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/9.png" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/10.png" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/11.png" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/12.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/13.png" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/14.png" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/15.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/16.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/17.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/18.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/19.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/20.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/21.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/22.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/23.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/24.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/25.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/26.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/27.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/28.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/29.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/30.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/31.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/32.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/33.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/34.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/35.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/36.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/tianjin/37.JPG" }] },
+    { title: "北京", date: "2025.04.05-2025.04.06", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/beijing.mp3", center: [116.4074, 39.9042], zoom: 10.5, pitch: 45, bearing: 0, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/1.png", text: "深夜里格外安静的清华园，和北京环球影城里充满欢笑的魔法世界。在这里，我们留下了最纯粹的快乐碰撞。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/2.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/3.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/4.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/5.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/6.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/7.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/8.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/9.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/10.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/11.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/12.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/13.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/beijing/14.jpg" }] },
+    { title: "仁川", date: "2025.07.19", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/inchon.mp3", center: [126.6322, 37.4563], zoom: 11, pitch: 50, bearing: 20, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/inchon/1.jpeg", text: "第一次一起看 Twice 演唱会！现场漫天飞舞的泡泡和彩带，把夜空染成了梦幻的颜色。当全场大合唱响起，那一刻的震撼与热血至今清晰可见。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/inchon/2.jpeg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/inchon/3.jpeg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/inchon/4.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/inchon/5.jpeg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/inchon/6.jpeg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/inchon/7.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/inchon/8.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/inchon/10.JPG" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/inchon/11.mp4" }] },
+    { title: "首尔", date: "2025.07.18-2025.07.20", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/seoul.mp3", center: [126.9780, 37.5665], zoom: 12, pitch: 55, bearing: -15, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/1.JPG", text: "穿上韩服漫步在景福宫。这里有错落有致的复古街巷和非常好逛的潮流商铺，每天靠着冰美式咖啡续命，嘴里却还回味着酱蟹、烤牛肠和香辣的火鸡面。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/19.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/17.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/18.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/2.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/3.JPG" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/4.mp4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/5.JPG" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/6.MP4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/7.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/8.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/9.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/10.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/11.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/12.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/13.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/14.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/15.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/16.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/17.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/18.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/19.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/20.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/21.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/22.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/23.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/24.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/25.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/26.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/27.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/28.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/29.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/30.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/31.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/32.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/33.JPG" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/34.MP4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/seoul/35.JPG" }] },
+    { title: "釜山", date: "2025.07.21-2025.07.22", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/busan.mp3", center: [129.0756, 35.1796], zoom: 11, pitch: 60, bearing: 40, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/1.jpeg", text: "经历了一场深夜生死时速坐上的城际大巴，睡在24小时社区汗蒸房里，醒来就是蔚蓝的大海、可爱的胶囊火车，还有海胆、活章鱼和盲鳗带来的海鲜暴击。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/2.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/3.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/4.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/5.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/22.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/6.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/7.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/8.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/9.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/10.jpeg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/11.jpeg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/12.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/13.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/14.jpeg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/15.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/16.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/17.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/18.jpeg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/19.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/20.JPG" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/21.MP4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/22.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/23.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/24.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/25.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/26.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/27.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/28.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/29.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/30.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/31.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/32.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/33.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/34.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/35.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/busan/36.jpg" }] },
+    { title: "香港", date: "2025.09.28", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/hongkong.mp3", center: [114.1694, 22.3193], zoom: 12, pitch: 60, bearing: -25, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/hongkong/1.jpg", text: "记忆里是炎热微潮的天气。坐上慢悠悠的叮叮车晃过喧嚣的中环，穿梭在各种小店里，只为寻找那只让人心仪的 Hello Kitty，既累又快乐着。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/hongkong/2.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/hongkong/3.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/hongkong/4.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/hongkong/5.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/hongkong/6.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/hongkong/7.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/hongkong/8.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/hongkong/9.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/hongkong/10.JPG" }] },
+    { title: "洛桑", date: "2025.10.01-2025.10.05", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/lausanne.mp3", center: [6.6323, 46.5197], zoom: 12, pitch: 50, bearing: 15, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/1.jpg", text: "日内瓦湖畔静谧的时光。清晨第一缕阳光洒在水面上，我们坐在湖边的秋千上荡来荡去，什么也不用想。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/2.png" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/3.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/4.png" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/5.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/6.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/7.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/8.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/9.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/10.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/11.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/12.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/13.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/14.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/15.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/16.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/lausanne/17.jpg" }] },
+    { title: "伯尔尼", date: "2025.10.04", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/bern.mp3", center: [7.4474, 46.9480], zoom: 13, pitch: 45, bearing: -10, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/1.jpg", text: "波光粼粼的图恩湖倒映着巍峨的格林德瓦雪山，大自然的壮丽让人屏息。当夜幕降临，老城的暖黄色灯火亮起，这才是最正宗的欧洲古典夜景。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/2.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/3.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/4.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/5.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/6.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/7.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/8.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/9.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/10.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/11.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/12.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/13.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/14.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/15.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/16.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/17.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/18.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/19.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/20.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/21.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/bern/22.jpg" }] },
+    { title: "日内瓦", date: "2025.10.05", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/geneva.mp3", center: [6.1432, 46.2044], zoom: 12, pitch: 50, bearing: 35, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/geneva/1.jpg", text: "巨大的日内瓦喷泉将水柱推上百米高空，在阳光下折射出彩虹。散步在湖畔的花园里，这里的包容与平静，洗净了旅途所有的疲惫。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/geneva/2.png" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/geneva/3.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/geneva/4.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/geneva/5.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/geneva/6.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/geneva/7.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/geneva/8.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/geneva/9.jpg" }] },
+    { title: "丹佛", date: "2025.10.25-2025.10.30", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/denver.mp3", center: [-104.9903, 39.7392], zoom: 11, pitch: 45, bearing: -45, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/1.jpg", text: "落基山脉脚下的纯净之城。秋天的街道上落满了金黄的树叶，踩上去沙沙作响。阳光正好的午后，漫步其中，连空气里都带着暖洋洋的清冽感。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/2.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/3.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/4.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/5.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/6.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/7.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/8.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/9.jpg" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/10.mp4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/11.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/12.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/13.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/14.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/15.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/16.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/17.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/18.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/19.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/20.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/denver/21.jpg" }] },
+    { title: "武汉", date: "2026.03.21-2026.03.22", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/wuhan.mp3", center: [114.3055, 30.5928], zoom: 11, pitch: 40, bearing: 10, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/1.jpg", text: "浪漫的江城记忆。微风吹过，落了一身的樱花雨，我们在花海和春光里走走停停，定格下了属于那个春天最温柔的画面。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/2.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/3.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/4.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/5.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/6.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/7.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/8.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/9.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/10.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/11.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/12.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/13.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/wuhan/14.jpg" }] },
+    { title: "杭州建德", date: "2026.04.04-2026.04.06", bgm: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/jiande.mp3", center: [119.2812, 29.4744], zoom: 11, pitch: 50, bearing: -20, image: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/1.jpg", text: "在这里真正走进了山水画里。在清澈见底的新安江上划着桨板，感受17度江水的清凉，不远处就是波光粼粼的千岛湖，春日的风无比温柔。", media: [{ type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/2.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/3.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/4.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/5.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/6.JPG" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/7.MP4" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/8.MP4" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/9.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/10.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/11.JPG" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/12.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/13.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/14.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/15.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/16.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/17.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/18.jpg" }, { type: "image", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/19.jpg" }, { type: "video", url: "https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/jiande/20.MP4" }] }
+  ];
+
+  // 🟢 修改点 1：完全根据截图 image_8a85e6.png 调整的初始全景参数（镜头正、缩放低）
+  const GLOBE_INITIAL_VIEW = {
+    center: [75.0, 30.0], // 将视角中心微调至亚洲/印度洋上空，完美复刻截图圆心
+    zoom: 1.8,             // 完美的太空全景缩放层级
+    pitch: 0,              // 0度代表正对地球，不产生倾斜，呈现完美的圆形球体
+    bearing: 0             // 正北朝上
+  };
+
+  const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/satellite-streets-v12', 
+    center: GLOBE_INITIAL_VIEW.center,
+    zoom: GLOBE_INITIAL_VIEW.zoom,
+    pitch: GLOBE_INITIAL_VIEW.pitch,
+    bearing: GLOBE_INITIAL_VIEW.bearing,
+    projection: 'globe', antialias: true
+  });
+
+  let activeMemoryData = null; 
+  let currentMediaIndex = 0; // 🟢 复制这一行：记录当前点开的是该城市的第几个照片/视频
+  // 🟢 声音核心控制变量
+  const launchSfx = document.getElementById('audio-launch');
+  // 🟢 用纯内存对象声明地球音乐，彻底隐形，免疫一切克隆 bug
+  const globeBgm = new Audio("https://raw.githubusercontent.com/CynthiaAnnX222/qqHBD/main/sound/globe.mp3");
+  globeBgm.loop = true; // 开启循环播放
+  let globeBgmMuted = false; // 用户是否手动关闭了地球音乐
+
+  let cityBgm = null;         // 当前城市的 BGM 音频对象
+  let cityBgmMuted = false;   // 用户是否在城市相册界面手动暂停了城市 BGM
+
+  map.on('style.load', () => {
+    map.setFog({
+      color: 'rgba(210, 230, 255, 0.6)', 'high-color': 'rgba(30, 90, 180, 0.8)',
+      range: [0.5, 10], 'space-color': 'rgba(11, 19, 43, 1)', 'star-intensity': 0.6, 'horizon-blend': 0.15
+    });
+
+    // 强转本地化中文
+    const style = map.getStyle();
+    if (style && style.layers) {
+      style.layers.forEach(layer => {
+        if (layer.layout && layer.layout['text-field']) {
+          map.setLayoutProperty(layer.id, 'text-field', ['coalesce', ['get', 'name_zh-Hans'], ['get', 'name_zh'], ['get', 'name']]);
+        }
+      });
+    }
+
+    setTimeout(() => {
+      // 🟢 修改点：点击加载界面解锁声音，触发飞船启动音效并播放地球BGM
+    const loader = document.getElementById('loading-screen');
+    if (loader) {
+      // 在加载环下方加一个点击进入的提示
+      const hint = document.createElement('div');
+      hint.className = 'loading-title';
+      hint.style.cssText = "font-size: 16px; margin-top: 10px; cursor: pointer; border: 1px solid #c9a96e; padding: 10px 20px; border-radius: 20px; background: rgba(255,255,255,0.05);";
+      hint.innerText = "启航 🚀";
+      loader.appendChild(hint);
+
+      // 🟢 完美融合：飞船启航音效瞬间触发 + 地球运镜动态缓冲
+      loader.addEventListener('click', () => {
+        // 1. 瞬间触发：一按下按钮，宇宙飞船启动音效毫无延迟立刻爆发
+        launchSfx.currentTime = 0;
+        launchSfx.play().catch(err => console.log("音效触发受阻:", err));
+
+        // 2. 动态缓冲：自动开启初始地球 BGM（音量调小作为背景衬托）
+        globeBgm.volume = 0.5;
+        globeBgm.play().catch(err => console.log(err));
+
+        // 3. 极客彩蛋运镜：在黑幕还没完全消失时，让地球在幕后悄悄开始自转平移，造成飞船正在推进的视觉缓冲
+        if (typeof map !== 'undefined') {
+          map.flyTo({
+            center: [105.0, 35.0], // 从宇宙边缘稍微向中国上空平移一小段，产生位移动态
+            zoom: 1.85,           // 镜头微微向前推进
+            speed: 0.02,          // 速度极慢，营造厚重的飞船离港缓冲感
+            curve: 1.0,
+            essential: true
+          });
+        }
+
+        // 4. 电影级淡出：将原先 1 秒的突兀转场，拉长到 2.5 秒（2500ms）的深空渐变
+        loader.style.transition = "opacity 5s cubic-bezier(0.25, 1, 0.5, 1)"; // 使用缓动曲线，前快后慢
+        loader.classList.add('fade-out');
+
+        // 5. 缓冲结束后彻底移除遮罩
+        setTimeout(() => {
+          loader.remove();
+        }, 5000); // 配合 2.5 秒的漫长高质感转场
+      });
+     } // 👈 补上这个结束 if 的大括号
+    }, 800);
+
+    drawExploreMarkers();
+  });
+
+  function drawExploreMarkers() {
+    MEMORIES.forEach((mem, i) => {
+      const el = document.createElement('div');
+      el.className = 'custom-marker';
+
+      el.addEventListener('click', (e) => {
+        e.stopPropagation(); 
+        
+        // 🟢 触发飞船启动音效
+        launchSfx.currentTime = 0;
+        launchSfx.play().catch(err => console.log(err));
+
+        map.flyTo({ center: mem.center, zoom: mem.zoom, pitch: mem.pitch, bearing: mem.bearing, speed: 0.65, curve: 1.4, essential: true });
+        openCard(mem);
+      });
+
+      new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat(mem.center)
+        .addTo(map);
+    });
+  }
+
+  function openCard(data) {
+    activeMemoryData = data; 
+    const card = document.getElementById('story-card');
+    card.classList.remove('active');
+
+    setTimeout(() => {
+      document.getElementById('card-city').textContent  = data.title;
+      document.getElementById('card-date').textContent  = data.date;
+      document.getElementById('card-img').src           = data.image;
+      document.getElementById('card-text').textContent  = data.text;
+      card.classList.add('active');
+    }, 200);
+  }
+
+  function closeCard() { document.getElementById('story-card').classList.remove('active'); }
+  map.on('click', () => { closeCard(); });
+
+  // 🟢 修改点 2：新增一键飞回大地球初始视角的函数
+  function resetToGlobeView() {
+    closeCard(); // 自动把当前可能开着的城市卡片关掉，还给界面清爽
+    
+    map.flyTo({
+      center: GLOBE_INITIAL_VIEW.center,
+      zoom: GLOBE_INITIAL_VIEW.zoom,
+      pitch: GLOBE_INITIAL_VIEW.pitch,
+      bearing: GLOBE_INITIAL_VIEW.bearing,
+      speed: 0.7,        // 飞回大地球的速度，略微轻快
+      curve: 1.5,        // 镜头拉高的完美反向弧度
+      essential: true
+    });
+  }
+
+  // 相册控制逻辑
+  document.getElementById('card-main-pic').addEventListener('click', () => {
+    if (!activeMemoryData) return;
+    const overlay = document.getElementById('gallery-overlay');
+    const grid = document.getElementById('gallery-media-grid');
+    document.getElementById('gallery-city-name').textContent = `📍 ${activeMemoryData.title} · 飞朱足迹`;
+    grid.innerHTML = ""; 
+
+    activeMemoryData.media.forEach((item, index) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = "media-item";
+      if (item.type === "image") {
+        wrapper.innerHTML = `<img src="${item.url}" alt="photo" />`;
+        wrapper.addEventListener('click', () => { currentMediaIndex = index; zoomMedia('image', item.url); });
+      } else if (item.type === "video") {
+        wrapper.innerHTML = `<video src="${item.url}" muted loop playsinline></video><div class="video-badge"><i class="fa-solid fa-circle-play"></i></div>`;
+        wrapper.addEventListener('mouseenter', () => wrapper.querySelector('video').play());
+        wrapper.addEventListener('mouseleave', () => { const v = wrapper.querySelector('video'); v.pause(); v.currentTime = 0; });
+        wrapper.addEventListener('click', () => { currentMediaIndex = index; zoomMedia('video', item.url); });
+      }
+      grid.appendChild(wrapper);
+    });
+    // 停掉地球 BGM
+    globeBgm.pause();
+
+    // 停掉上一个城市的 BGM（如果有）
+    if (cityBgm) {
+    cityBgm.pause();
+    cityBgm.currentTime = 0;
+  }
+
+    // 播放当前城市的 BGM
+    if (activeMemoryData.bgm) {
+    cityBgm = new Audio(activeMemoryData.bgm);
+    cityBgm.loop = true;
+    cityBgmMuted = false;
+    cityBgm.play().catch(err => console.log(err));
+  }
+    overlay.classList.add('active');
+  });
+
+  function closeGallery() {
+  document.getElementById('gallery-overlay').classList.remove('active');
+  
+  // 停掉城市 BGM
+  if (cityBgm) {
+    cityBgm.pause();
+    cityBgm.currentTime = 0;
+    cityBgm = null;
+  }
+  
+  // 恢复地球 BGM（如果用户没有手动关掉它的话）
+  if (!globeBgmMuted) {
+    globeBgm.play().catch(err => console.log(err));
+    document.getElementById('globe-bgm-text').innerText = "暂停音乐";
+  }
+ }
+
+  // ✨ 优化后的代码：确保 100% 激活声音
+  function zoomMedia(type, url) {
+    const lightbox = document.getElementById('lightbox');
+    const targetBox = document.getElementById('lightbox-target-box');
+    targetBox.innerHTML = "";
+    
+    if (type === 'image') { 
+      targetBox.innerHTML = `<img id="lightbox-content" src="${url}" alt="Zoomed" />`; 
+    }
+    else if (type === 'video') { 
+      // 1. 显式地将 volume 设为 1.0 (最大音量)，且坚决不加 muted 属性
+      targetBox.innerHTML = `<video id="lightbox-content" src="${url}" controls autoplay style="width:100%; height:100%;"></video>`; 
+      
+      // 2. 用 JS 代码在视频加载完毕后，强行给它解除静音并调高音量
+      const videoElement = document.getElementById('lightbox-content');
+      if (videoElement) {
+        videoElement.muted = false; // 强行关闭静音
+        videoElement.volume = 1.0;  // 声音开到最大
+        
+        // 暂停城市 BGM（或地球 BGM，看当前在哪个界面）
+        const activeBgm = cityBgm || globeBgm;
+        activeBgm.pause();
+        
+        // 3. 兜底策略：如果因为浏览器拦截导致播放失败，自动转为尝试带声音播放
+        videoElement.play().catch(error => {
+          console.log("浏览器拦截了带声音的自动播放，好朋友需要手动点一下视频上的播放或小喇叭按钮哦：", error);
+        });
+        // 视频播放结束后，恢复 BGM
+        videoElement.addEventListener('ended', () => {
+        if (!cityBgmMuted && cityBgm) {
+        cityBgm.play().catch(err => console.log(err));
+        } else if (!globeBgmMuted && !cityBgm) {
+        globeBgm.play().catch(err => console.log(err));
+       }
+     });
+      }
+    }
+    lightbox.classList.add('active');
+  }
+
+  function closeLightbox() {
+    const lightbox = document.getElementById('lightbox');
+    const video = lightbox.querySelector('video');
+    if (video) video.pause();
+    lightbox.classList.remove('active');
+    // 如果关掉的是视频灯箱，也要恢复 BGM
+    const activeBgm = cityBgm || globeBgm;
+    const isMuted = cityBgm ? cityBgmMuted : globeBgmMuted;
+    if (!isMuted) {
+    activeBgm.play().catch(err => console.log(err));
+   }
+  }
+  // 🟢 复制以下两个函数，追加到 script 里的末尾区域
+
+  // 1. 核心翻页计算逻辑
+  // 🟢 完美修正：切换大图时，智能判定并自动恢复城市/地球 BGM
+  function navigateMedia(direction) {
+    if (!activeMemoryData || !activeMemoryData.media) return;
+    
+    const totalMedia = activeMemoryData.media.length;
+    // 计算下一个需要播放的媒体索引
+    currentMediaIndex = (currentMediaIndex + direction + totalMedia) % totalMedia;
+    
+    const nextMedia = activeMemoryData.media[currentMediaIndex];
+    
+    // 💡 新增智能判定：如果下一张切换到的是照片(image)，则让被暂停的音乐自动恢复播放
+    if (nextMedia.type === 'image') {
+      // 动态抓取当前的音频（如果城市BGM存在就用城市BGM，没有就用大地球BGM）
+      const activeBgm = cityBgm || globeBgm;
+      const isMuted = cityBgm ? cityBgmMuted : globeBgmMuted;
+      
+      // 如果用户没有手动静音，且当前音乐是暂停的，就让它唱起来
+      if (activeBgm && !isMuted && activeBgm.paused) {
+        activeBgm.play().catch(err => console.log("切换到照片时恢复BGM失败:", err));
+      }
+    }
+    
+    // 调用原有的放大灯箱渲染函数，加载上/下一张
+    zoomMedia(nextMedia.type, nextMedia.url);
+  }
+
+  // 2. 键盘左右方向键监听扩展（支持键盘盲操左右翻页，非常炫酷）
+  document.addEventListener('keydown', (e) => {
+    const lightbox = document.getElementById('lightbox');
+    if (lightbox.classList.contains('active')) {
+      if (e.key === 'ArrowRight') navigateMedia(1);
+      if (e.key === 'ArrowLeft') navigateMedia(-1);
+      if (e.key === 'Escape') closeLightbox();
+    }
+  });
+  // 🟢 复制以下内容，直接粘贴在 </script> 的上方即可
+  // 🟢 复制以下内容，完全覆盖最末尾的按钮点击事件
+  
+  </script>
+</body>
+</html>
