@@ -463,6 +463,35 @@
         }
       }
       refreshBgmToggleIcon();
+    }
+
+    // 🟢 新增：视频播放时把 BGM "压低垫底"到正常音量的 30%（视频有声音时薄薄垫在底下）
+    const BGM_DUCK_RATIO = 0.3; // 压低到正常音量的 30%
+
+    // 取得「当前生效的 BGM」以及它的「正常音量」
+    function getActiveBgmInfo() {
+      if (cityBgm) {
+        return { audio: cityBgm, normalVol: CITY_BGM_VOLUME, muted: cityBgmMuted };
+      }
+      return { audio: globeBgm, normalVol: GLOBE_BGM_VOLUME, muted: globeBgmMuted };
+    }
+
+    // 视频开始播放：把当前 BGM 平滑压低到 30% 垫底（已静音则保持静音）
+    function duckBgm() {
+      const info = getActiveBgmInfo();
+      if (!info.audio || info.muted) return;
+      // 确保 BGM 在播放，再淡到 30%
+      if (info.audio.paused) {
+        info.audio.play().catch(err => console.log("垫底BGM播放受阻:", err));
+      }
+      fadeInAudio(info.audio, info.normalVol * BGM_DUCK_RATIO);
+    }
+
+    // 视频结束 / 关闭灯箱：把当前 BGM 平滑恢复到正常音量（已静音则保持静音）
+    function unduckBgm() {
+      const info = getActiveBgmInfo();
+      if (!info.audio || info.muted) return;
+      fadeInAudio(info.audio, info.normalVol);
     }   // 用户是否在城市相册界面手动暂停了城市 BGM
 
   map.on('style.load', () => {
@@ -672,9 +701,8 @@
         videoElement.muted = false; // 强行关闭静音
         videoElement.volume = 1.0;  // 声音开到最大
         
-        // 暂停城市 BGM（或地球 BGM，看当前在哪个界面）
-        const activeBgm = cityBgm || globeBgm;
-        activeBgm.pause();
+        // 🟢 视频有声音时，不再暂停 BGM，而是把它压低到 30% 薄薄垫在底下
+        duckBgm();
         
         // 3. 兜底策略：如果因为浏览器拦截导致播放失败，自动转为尝试带声音播放
         videoElement.play().catch(error => {
@@ -682,29 +710,22 @@
         });
         // 视频播放结束后，恢复 BGM
         videoElement.addEventListener('ended', () => {
-        if (!cityBgmMuted && cityBgm) {
-        cityBgm.play().catch(err => console.log(err));
-        } else if (!globeBgmMuted && !cityBgm) {
-        globeBgm.play().catch(err => console.log(err));
-       }
-     });
+          // 🟢 视频结束：把被压低的 BGM 平滑恢复到正常音量
+          unduckBgm();
+        });
       }
     }
     lightbox.classList.add('active');
   }
 
   function closeLightbox() {
-    const lightbox = document.getElementById('lightbox');
-    const video = lightbox.querySelector('video');
-    if (video) video.pause();
-    lightbox.classList.remove('active');
-    // 如果关掉的是视频灯箱，也要恢复 BGM
-    const activeBgm = cityBgm || globeBgm;
-    const isMuted = cityBgm ? cityBgmMuted : globeBgmMuted;
-    if (!isMuted) {
-    activeBgm.play().catch(err => console.log(err));
-   }
-  }
+      const lightbox = document.getElementById('lightbox');
+      const video = lightbox.querySelector('video');
+      if (video) video.pause();
+      lightbox.classList.remove('active');
+      // 🟢 关闭灯箱（可能是关掉正在播放的视频）：把被压低的 BGM 平滑恢复到正常音量
+      unduckBgm();
+    }
   // 🟢 复制以下两个函数，追加到 script 里的末尾区域
 
   // 1. 核心翻页计算逻辑
@@ -720,15 +741,9 @@
     
     // 💡 新增智能判定：如果下一张切换到的是照片(image)，则让被暂停的音乐自动恢复播放
     if (nextMedia.type === 'image') {
-      // 动态抓取当前的音频（如果城市BGM存在就用城市BGM，没有就用大地球BGM）
-      const activeBgm = cityBgm || globeBgm;
-      const isMuted = cityBgm ? cityBgmMuted : globeBgmMuted;
-      
-      // 如果用户没有手动静音，且当前音乐是暂停的，就让它唱起来
-      if (activeBgm && !isMuted && activeBgm.paused) {
-        activeBgm.play().catch(err => console.log("切换到照片时恢复BGM失败:", err));
+        // 🟢 翻到照片：把可能被视频压低到 30% 的 BGM 平滑恢复到正常音量
+        unduckBgm();
       }
-    }
     
     // 调用原有的放大灯箱渲染函数，加载上/下一张
     zoomMedia(nextMedia.type, nextMedia.url);
