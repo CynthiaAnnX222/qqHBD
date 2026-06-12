@@ -480,17 +480,22 @@
     function duckBgm() {
       const info = getActiveBgmInfo();
       if (!info.audio || info.muted) return;
+      const target = info.normalVol * BGM_DUCK_RATIO;
+      // 幂等保护：如果已经压低到目标音量（且没有正在淡变），就不重复处理
+      if (!info.audio._fadeTimer && Math.abs(info.audio.volume - target) < 0.01) return;
       // 确保 BGM 在播放，再淡到 30%
       if (info.audio.paused) {
         info.audio.play().catch(err => console.log("垫底BGM播放受阻:", err));
       }
-      fadeInAudio(info.audio, info.normalVol * BGM_DUCK_RATIO);
+      fadeInAudio(info.audio, target);
     }
 
     // 视频结束 / 关闭灯箱：把当前 BGM 平滑恢复到正常音量（已静音则保持静音）
     function unduckBgm() {
       const info = getActiveBgmInfo();
       if (!info.audio || info.muted) return;
+      // 幂等保护：如果音量已经是正常值（且没有正在淡变），就直接返回，避免「音量归零再爬升」的突兀感
+      if (!info.audio._fadeTimer && Math.abs(info.audio.volume - info.normalVol) < 0.01) return;
       fadeInAudio(info.audio, info.normalVol);
     }   // 用户是否在城市相册界面手动暂停了城市 BGM
 
@@ -731,23 +736,28 @@
   // 1. 核心翻页计算逻辑
   // 🟢 完美修正：切换大图时，智能判定并自动恢复城市/地球 BGM
   function navigateMedia(direction) {
-    if (!activeMemoryData || !activeMemoryData.media) return;
-    
-    const totalMedia = activeMemoryData.media.length;
-    // 计算下一个需要播放的媒体索引
-    currentMediaIndex = (currentMediaIndex + direction + totalMedia) % totalMedia;
-    
-    const nextMedia = activeMemoryData.media[currentMediaIndex];
-    
-    // 💡 新增智能判定：如果下一张切换到的是照片(image)，则让被暂停的音乐自动恢复播放
-    if (nextMedia.type === 'image') {
-        // 🟢 翻到照片：把可能被视频压低到 30% 的 BGM 平滑恢复到正常音量
+      if (!activeMemoryData || !activeMemoryData.media) return;
+
+      const totalMedia = activeMemoryData.media.length;
+
+      // 🟢 先记下「正在离开的这一张」是不是视频
+      const prevMedia = activeMemoryData.media[currentMediaIndex];
+      const leavingVideo = prevMedia && prevMedia.type === 'video';
+
+      // 计算下一个需要播放的媒体索引
+      currentMediaIndex = (currentMediaIndex + direction + totalMedia) % totalMedia;
+
+      const nextMedia = activeMemoryData.media[currentMediaIndex];
+
+      // 🟢 只有「从视频离开、且下一张不是视频」时，才把被压低的 BGM 恢复到正常音量。
+      // 图片之间互相翻页完全不碰音量；下一张还是视频则交给 zoomMedia 里的 duckBgm 继续保持 30%。
+      if (leavingVideo && nextMedia.type !== 'video') {
         unduckBgm();
       }
-    
-    // 调用原有的放大灯箱渲染函数，加载上/下一张
-    zoomMedia(nextMedia.type, nextMedia.url);
-  }
+
+      // 调用原有的放大灯箱渲染函数，加载上/下一张
+      zoomMedia(nextMedia.type, nextMedia.url);
+    }
 
   // 2. 键盘左右方向键监听扩展（支持键盘盲操左右翻页，非常炫酷）
   document.addEventListener('keydown', (e) => {
