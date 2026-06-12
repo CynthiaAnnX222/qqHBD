@@ -190,8 +190,24 @@
     }
     #lightbox.active { opacity: 1; pointer-events: auto; }
     #lightbox-content { max-width: 90%; max-height: 85%; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
-    .lightbox-close { position: absolute; top: 30px; right: 40px; color: #fff; font-size: 36px; cursor: pointer; transition: color 0.3s; }
-    .lightbox-close:hover { color: var(--emerald); }
+    .lightbox-close {
+        position: absolute; top: 24px; right: 30px; z-index: 220;
+        width: 44px; height: 44px; border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: #ffffff; font-size: 18px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+      }
+      .lightbox-close:hover {
+        background: rgba(44, 199, 165, 0.25);
+        border-color: var(--emerald);
+        color: var(--emerald);
+        transform: scale(1.1);
+        box-shadow: 0 4px 20px rgba(44, 199, 165, 0.3);
+      }
 
     /* 🟢 新增：右上角 BGM 静音/取消静音 小喇叭按钮 */
     #bgm-toggle-btn {
@@ -318,9 +334,11 @@
 
   <!-- 多媒体全屏放大灯箱 -->
   <div id="lightbox">
-    <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+    <button class="lightbox-close" onclick="closeLightbox()" title="返回相册" aria-label="关闭预览">
+      <i class="fa-solid fa-xmark"></i>
+    </button>    
     
-    <button class="nav-arrow arrow-left" onclick="navigateMedia(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+        <button class="nav-arrow arrow-left" onclick="navigateMedia(-1)"><i class="fa-solid fa-chevron-left"></i></button>
     <button class="nav-arrow arrow-right" onclick="navigateMedia(1)"><i class="fa-solid fa-chevron-right"></i></button>
     
     <div id="lightbox-target-box" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;"></div>
