@@ -190,8 +190,9 @@
     }
     #lightbox.active { opacity: 1; pointer-events: auto; }
     #lightbox-content { max-width: 90%; max-height: 85%; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+    #lightbox-inner { position: relative; display: inline-flex; align-items: center; justify-content: center; max-width: 90vw; max-height: 85vh; }
     .lightbox-close {
-        position: absolute; top: 24px; right: 30px; z-index: 220;
+        position: absolute; top: -20px; right: -20px;
         width: 44px; height: 44px; border-radius: 50%;
         background: rgba(255, 255, 255, 0.1);
         border: 1px solid rgba(255, 255, 255, 0.25);
@@ -334,14 +335,15 @@
 
   <!-- 多媒体全屏放大灯箱 -->
   <div id="lightbox">
-    <button class="lightbox-close" onclick="closeLightbox()" title="返回相册" aria-label="关闭预览">
-      <i class="fa-solid fa-xmark"></i>
-    </button>    
-    
-        <button class="nav-arrow arrow-left" onclick="navigateMedia(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+    <button class="nav-arrow arrow-left" onclick="navigateMedia(-1)"><i class="fa-solid fa-chevron-left"></i></button>
     <button class="nav-arrow arrow-right" onclick="navigateMedia(1)"><i class="fa-solid fa-chevron-right"></i></button>
-    
-    <div id="lightbox-target-box" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;"></div>
+ 
+    <div id="lightbox-inner">
+      <button class="lightbox-close" onclick="closeLightbox()" title="返回相册" aria-label="关闭预览">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div id="lightbox-target-box" style="display:flex; align-items:center; justify-content:center;"></div>
+    </div>
   </div>
 
   <script>
