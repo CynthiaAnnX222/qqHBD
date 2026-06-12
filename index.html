@@ -424,6 +424,33 @@
       }, stepTime);
     }
 
+    // 🟢 新增：从「当前音量」平滑过渡到任意目标音量（可升可降，不会先跳到 0）
+    // 用于视频压低/恢复 BGM，避免突然减小
+    function fadeAudioTo(audio, targetVol, duration = BGM_FADE_MS) {
+      if (!audio) return;
+      if (audio._fadeTimer) clearInterval(audio._fadeTimer);
+      // 确保在播放，否则音量调了也听不到
+      if (audio.paused) {
+        audio.play().catch(err => console.log("平滑过渡播放受阻:", err));
+      }
+      const startVol = audio.volume;
+      const delta = targetVol - startVol;
+      // 已经到位就不折腾
+      if (Math.abs(delta) < 0.01) { audio.volume = targetVol; return; }
+      const steps = 30;
+      const stepTime = duration / steps;
+      let i = 0;
+      audio._fadeTimer = setInterval(() => {
+        i++;
+        audio.volume = Math.max(0, Math.min(1, startVol + delta * (i / steps)));
+        if (i >= steps) {
+          clearInterval(audio._fadeTimer);
+          audio._fadeTimer = null;
+          audio.volume = targetVol;
+        }
+      }, stepTime);
+    }
+
     // 显示右上角小喇叭按钮（启航后调用）
     function showBgmToggleBtn() {
       const btn = document.getElementById('bgm-toggle-btn');
@@ -466,7 +493,7 @@
     }
 
     // 🟢 新增：视频播放时把 BGM "压低垫底"到正常音量的 30%（视频有声音时薄薄垫在底下）
-    const BGM_DUCK_RATIO = 0.3; // 压低到正常音量的 30%
+    const BGM_DUCK_RATIO = 0.2; // 压低到正常音量的 20%
 
     // 取得「当前生效的 BGM」以及它的「正常音量」
     function getActiveBgmInfo() {
@@ -483,20 +510,18 @@
       const target = info.normalVol * BGM_DUCK_RATIO;
       // 幂等保护：如果已经压低到目标音量（且没有正在淡变），就不重复处理
       if (!info.audio._fadeTimer && Math.abs(info.audio.volume - target) < 0.01) return;
-      // 确保 BGM 在播放，再淡到 30%
-      if (info.audio.paused) {
-        info.audio.play().catch(err => console.log("垫底BGM播放受阻:", err));
-      }
-      fadeInAudio(info.audio, target);
+      // 🟢 从当前音量平滑下降到 20%（不再突然减小）
+      fadeAudioTo(info.audio, target);
     }
 
     // 视频结束 / 关闭灯箱：把当前 BGM 平滑恢复到正常音量（已静音则保持静音）
     function unduckBgm() {
       const info = getActiveBgmInfo();
       if (!info.audio || info.muted) return;
-      // 幂等保护：如果音量已经是正常值（且没有正在淡变），就直接返回，避免「音量归零再爬升」的突兀感
+      // 幂等保护：如果音量已经是正常值（且没有正在淡变），就直接返回
       if (!info.audio._fadeTimer && Math.abs(info.audio.volume - info.normalVol) < 0.01) return;
-      fadeInAudio(info.audio, info.normalVol);
+      // 🟢 从当前（被压低的）音量平滑回升到正常音量
+      fadeAudioTo(info.audio, info.normalVol);
     }   // 用户是否在城市相册界面手动暂停了城市 BGM
 
   map.on('style.load', () => {
