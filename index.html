@@ -189,8 +189,19 @@
       opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
     }
     #lightbox.active { opacity: 1; pointer-events: auto; }
-    #lightbox-content { max-width: 90%; max-height: 85%; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
-    #lightbox-inner { position: relative; display: inline-flex; align-items: center; justify-content: center; max-width: 90vw; max-height: 85vh; }
+    #lightbox-content { max-width: 90vw; 
+  max-height: 85vh; 
+  width: auto;
+  height: auto;
+  object-fit: contain; /* 确保图片完整显示，不被裁剪 */
+  border-radius: 8px; 
+  box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+    #lightbox-inner { position: relative; 
+  display: flex; /* 改为 flex */
+  align-items: center; 
+  justify-content: center; 
+  max-width: 90vw; 
+  max-height: 85vh; }
     .lightbox-close {
         position: absolute; top: -20px; right: -20px;
         width: 44px; height: 44px; border-radius: 50%;
