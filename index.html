@@ -37,8 +37,13 @@
 
     /* 顶部标题加控制按钮区域 */
     #header-container {
-      position: fixed; top: 30px; left: 30px; z-index: 50;
-      display: flex; flex-direction: column; gap: 15px;
+      position: fixed; 
+      top: 30px; 
+      left: 30px; 
+      z-index: 300; /* 💥 关键修复：把整块层级提到最高，确保点进城市相册(z-index:100)时也能看到和点到音量键 */
+      display: flex; 
+      flex-direction: column; 
+      gap: 15px; /* 容器内部项会自动保持 15px 间距纵向等距排队 */
     }
 
     /* 顶部标题面板 */
@@ -240,25 +245,41 @@
       }
 
     /* 🟢 新增：右上角 BGM 静音/取消静音 小喇叭按钮 */
+    /* 🟢 优化后的音量按钮样式 */
     #bgm-toggle-btn {
-      position: fixed; top: 30px; right: 30px; z-index: 300;
-      width: 48px; height: 48px; border-radius: 50%;
-      background: var(--card-bg);
-      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--card-border);
-      color: #ffffff; font-size: 16px; cursor: pointer;
-      display: none; align-items: center; justify-content: center;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-      transition: opacity 0.6s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s, color 0.3s;
-      opacity: 0;
-    }
-    #bgm-toggle-btn.visible { display: flex; opacity: 1; }
-    #bgm-toggle-btn:hover {
-      border-color: var(--emerald); color: var(--emerald);
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(44, 199, 165, 0.25);
-    }
-    #bgm-toggle-btn.muted { color: var(--text-muted); }
+      align-self: flex-start; /* 居左对齐 */
+      width: 44px; 
+      height: 44px; 
+      border-radius: 50%; /* 完美的圆形 */
+      background: var(--card-bg);
+      backdrop-filter: blur(20px); 
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      color: #ffffff; 
+      font-size: 15px; 
+      cursor: pointer;
+      display: none; /* 💥 核心保留：初始化隐藏，配合你的 JS showBgmToggleBtn() 启航后淡入 */
+      align-items: center; 
+      justify-content: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    
+    /* 启航后显示 */
+    #bgm-toggle-btn.visible { 
+      display: flex; 
+    }
+    
+    /* 悬浮发光特效 */
+    #bgm-toggle-btn:hover {
+      border-color: var(--emerald); 
+      color: var(--emerald);
+      transform: scale(1.05);
+      box-shadow: 0 10px 25px rgba(44, 199, 165, 0.25);
+    }
+    #bgm-toggle-btn.muted { 
+      color: var(--text-muted); 
+    }
     @media (max-width: 680px) {
       #bgm-toggle-btn { top: 15px; right: 15px; width: 42px; height: 42px; font-size: 14px; }
     }
@@ -316,24 +337,21 @@
 
   <div id="map"></div>
 
-  <!-- 🟢 新增：右上角 BGM 静音/取消静音 小喇叭按钮（启航后才显示） -->
-  <button id="bgm-toggle-btn" onclick="toggleBgmMute()" title="静音 / 取消静音" aria-label="静音切换">
-    <i class="fa-solid fa-volume-high"></i>
-  </button>
-
-  <!-- 左上角整合面板 -->
   <div id="header-container">
-    <header class="header-panel">
-      <span class="main-title">飞朱环游记</span>
-      <span class="subtitle">with lidar mini version </span>
-    </header>
-    
-    <!-- 🟢 新增的“返回地球全景”重置按钮 -->
-    <button class="reset-view-btn" onclick="resetToGlobeView()">
-      <i class="fa-solid fa-earth-asia"></i>
-      <span>返回地球全景</span>
-    </button>
-  </div>
+    <header class="header-panel">
+      <span class="main-title">飞朱环游记</span>
+      <span class="subtitle">with lidar mini version </span>
+    </header>
+    
+    <button class="reset-view-btn" onclick="resetToGlobeView()">
+      <i class="fa-solid fa-earth-asia"></i>
+      <span>返回地球全景</span>
+    </button>
+
+    <button id="bgm-toggle-btn" onclick="toggleBgmMute()" title="静音 / 取消静音" aria-label="静音切换">
+      <i class="fa-solid fa-volume-high"></i>
+    </button>
+  </div>
 
   <!-- 右侧故事卡片 -->
   <div id="story-card">
