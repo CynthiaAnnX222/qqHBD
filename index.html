@@ -184,24 +184,42 @@
 
     /* 多媒体进一步放大预览灯箱 */
     #lightbox {
-      position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.95);
-      display: flex; align-items: center; justify-content: center;
-      opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+      position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
     }
-    #lightbox.active { opacity: 1; pointer-events: auto; }
-    #lightbox-content { max-width: 90vw; 
-  max-height: 85vh; 
-  width: auto;
-  height: auto;
-  object-fit: contain; /* 确保图片完整显示，不被裁剪 */
-  border-radius: 8px; 
-  box-shadow: 0 0 30px rgba(0,0,0,0.8); }
-    #lightbox-inner { position: relative; 
-  display: flex; /* 改为 flex */
-  align-items: center; 
-  justify-content: center; 
-  max-width: 90vw; 
-  max-height: 85vh; }
+    #lightbox.active { opacity: 1;
+  pointer-events: auto; }
+    #lightbox-content { max-width: 100% !important;
+  max-height: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important; /* 核心：等比例缩放居中完整显示 */
+  border-radius: 8px;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.8); }
+    #lightbox-inner { position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 90vw;   /* 严格限制最大占屏幕宽度的 90% */
+  height: 85vh;  /* 严格限制最大占屏幕高度的 85% */ }
+    #lightbox-target-box {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden; /* 防止溢出 */
+}
     .lightbox-close {
         position: absolute; top: -20px; right: -20px;
         width: 44px; height: 44px; border-radius: 50%;
